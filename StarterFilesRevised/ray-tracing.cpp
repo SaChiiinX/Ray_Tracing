@@ -180,11 +180,19 @@ void parseSceneFile(char* sceneName)
   ifs.close();
 }
 
+void intializeImage()
+{
+
+}
+
+
 
 int main(int, char *argv[])
 {
     parseSceneFile(argv[1]);
-
+    initializeImage();
+    RT_algorithm();
+    writeImageFile();
     return 0;
 }
 

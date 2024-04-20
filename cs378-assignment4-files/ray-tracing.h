@@ -9,15 +9,36 @@ class Sphere;
 
 class Vec
 {
-  private:
+    friend Vec operator*(double num, const Vec& v);
+
+private:
     double x;
     double y;
     double z;
 
-  public:
+public:
+    void normalize();
+    double norm() const;
+    double dot(const Vec& other) const;
+    Vec operator+(const Vec& other) const;
+    Vec operator-(const Vec& other) const;
+    const double& operator[](int i) const;
+    double& operator[](int i);
     Vec();
     Vec(ifstream& ifs);
+    Vec(double xx, double yy, double zz);
+    Vec(const Vec& other);
+ //   explicit Vec(const Vect& v);
+};
 
+class Ray
+{
+    private:
+        Vec* v0;
+        Vec* v1;
+    public:
+        Ray(Vec* v1);
+        Ray(Vec* v0, Vec* v1);
 };
 
 
@@ -32,6 +53,9 @@ class Color
 	Color();
     Color(ifstream& ifs);
     Color(double r, double g, double b);
+    Color add(Color color);
+    Color scale(double c);
+    void writeOut(ofstream& ofs);
 
 };
 
@@ -61,6 +85,8 @@ class Figure
  public:
    Figure();
    void initFigure(ifstream& ifs);
+   Color getColor(double c);
+   virtual double intersection(const Ray& r, double minT, double maxT) const = 0;
 };
 
 
@@ -74,6 +100,7 @@ class Plane : public Figure
     Vec direction2;
   public:
     Plane(ifstream& ifs);
+    virtual double intersection(const Ray& r, double minT, double maxT) const;
 };
 
 class Sphere : public Figure
@@ -83,5 +110,6 @@ class Sphere : public Figure
     double radius;
   public:
     Sphere(ifstream& ifs);
+    virtual double intersection(const Ray& r, double minT, double maxT) const;
 };
 
