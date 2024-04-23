@@ -64,6 +64,12 @@ Vec Vec::operator-(const Vec& other) const
     return Vec(x3, y3, z3);
 }
 
+Vec Vec::operator*(double num) const
+{
+    Vec newVec(num * this->x, num * this->y, num * this->z);
+    return newVec;
+}
+
 Vec::Vec() : x(0.0), y(0.0), z(0.0) {}
 
 Vec::Vec(ifstream& ifs)
@@ -77,12 +83,6 @@ Vec::Vec(const Vec& other) : x(other.x), y(other.y), z(other.z) {}
 
 // Vec::Vec(const Vect& v) : x(v[0]), y(v[1]), z(v[2]) {}
 
-
-Vec operator*(double num, const Vec& v)
-{
-    Vec newVec(num * v.x, num * v.y, num * v.z);
-    return newVec;
-}
 
 const double& Vec::operator[](int i) const
 {
@@ -130,9 +130,9 @@ Color Color::scale(double c)
 
 void Color::writeOut(ofstream& ofs)
 {
-    ofs << this->red << "\t";
-    ofs << this->blue << "\t";
-    ofs << this->green << "\t";
+    ofs << this->red << " ";
+    ofs << this->blue << " ";
+    ofs << this->green << " ";
 }
 
 Figure::Figure(){}
@@ -169,6 +169,44 @@ Sphere::Sphere(ifstream& ifs) : center(ifs)
 
 double Sphere::intersection(const Ray& r, double minT, double maxT) const
 {
+    Vec p0 = *r.getOrigin();
+    Vec p1 = *r.getPoint();
+    Vec h = p1.operator-(p0);
+    Vec k = p0.operator-(center);
+    double a = h.dot(h);
+    double b = 2 * (h.dot(k));
+    double c = k.dot(k) * radius * radius;
+
+
+
+    double sqrtroot = sqrt(b * b - (4 * a * c));
+
+    if (sqrtroot < 0) {
+        return -1;
+
+    }
+
+    double denominator = 2 * a * c;
+    double posQuad = (-b + sqrtroot) / denominator;
+    double negQuad = (-b - sqrtroot) / denominator;
+
+    if ((posQuad >= 1) && (negQuad >= 1)) {
+        return min(posQuad, negQuad);
+    }
+    else if (posQuad >= 1) {
+        return posQuad;
+    }
+    else if (negQuad >= 1) {
+        return negQuad;
+    }
+    else {
+        return minT;
+    }
+}
+
+Vec Sphere::getNormal()
+{
+    return Vec();
 }
 
 
@@ -182,6 +220,42 @@ Plane::Plane(ifstream& ifs) : abcVector(ifs)
 
 double Plane::intersection(const Ray& r, double minT, double maxT) const
 {
+    Vec p0 = *r.getOrigin();
+    Vec p1 = *r.getPoint();
+    double denominator = (p1 - (p0)).dot(abcVector);
+
+    if (denominator == 0) {
+        return minT;
+    }
+    else {
+        double numerator = dScalar - p1.dot(abcVector);
+        return numerator / denominator;
+    }
+}
+
+Vec Plane::getNormal()
+{
+    return abcVector;
+}
+
+Vec Plane::getABC()
+{
+    return this->abcVector;
+}
+
+double Plane::getD()
+{
+    return this->dScalar;
+}
+
+Vec Plane::getD1()
+{
+    return this->direction1;
+}
+
+Vec Plane::getD2()
+{
+    return this->direction2;
 }
 
 
@@ -216,7 +290,7 @@ void parseSceneFile(char* sceneName)
 
 Ray::Ray(Vec* v1)
 {
-    this->v0 = new Vec(0, 0, zCoor);
+    this->v0 = new Vec(cameraX, cameraY, cameraZ);
     // This may be a problem later
     this->v1 = v1;
 }
@@ -228,26 +302,51 @@ Ray::Ray(Vec* v0, Vec* v1)
     this->v1 = v1;
 }
 
+Vec* Ray::getOrigin() const
+{
+    return this->v0;
+}
+
+Vec* Ray::getPoint() const
+{
+    return this->v1;
+}
+
+Color RT_shade(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth)
+{
+    Color newColor = ambient * obj->getColorAmbient();
+    ... RT_lights(obj, ray, i, normal)
+        ... RT_reflect(obj, ray, i, normal, depth);
+    ... RT_transmit(obj, ray, i, normal, entering, depth);
+    ...
+}
+
 
 
 
 pair<double, Figure*> nearestIntersection(const Ray& r, double minT, double maxT, bool mayBeTransparent = true)
 {
+    pair<double, Figure*> ret(maxT, NULL);
     for (Figure* figure : shapeList)
     {
-        figure->intersection(r, minT, maxT);
-        double c = 0.0;
-
+        double val = figure->intersection(r, minT, maxT);
+        if (val < ret.first) {
+            ret.first = val;
+            ret.second = figure;
+        }   
     }
+
+    return ret;
 }
 
 
 Color RT_trace(const Ray& r, double depth)
 {
-    double epsilon = 0.0;
-    double maxT = 0.0;
+    double epsilon = 1;
+    double maxT = 5000;
     pair<double, Figure*> intersection =  nearestIntersection(r, epsilon, maxT);
-    ... RT_shade(figure, r, i, normal, entering, depth);
+    Figure* nearest = intersection.second;
+    RT_shade(nearest, r, i, nearest->, entering, depth);
 }
 
 
@@ -285,15 +384,13 @@ void writeImageFile()
     ofstream ofs;
     ofs.open("test.ppm");
     ofs << "P3\n";
-    ofs << horizontalResolution << "\t" << verticalResolution << "\n";
+    ofs << horizontalResolution << " " << verticalResolution << " " << "\n";
 
     // Color of each pixel
     for (int u = 0; u < horizontalResolution; u++) {
         for (int v = 0; v < verticalResolution; v++) {
-            if (v % 4 == 0) {
-                ofs << "\n";
-            }
             pixelColors[u][v].writeOut(ofs);
+            cout << "\n";
         }
     }
     ofs.close();

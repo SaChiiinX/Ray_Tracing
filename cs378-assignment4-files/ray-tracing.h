@@ -22,6 +22,7 @@ public:
     double dot(const Vec& other) const;
     Vec operator+(const Vec& other) const;
     Vec operator-(const Vec& other) const;
+    Vec operator*(double t) const;
     const double& operator[](int i) const;
     double& operator[](int i);
     Vec();
@@ -39,6 +40,8 @@ class Ray
     public:
         Ray(Vec* v1);
         Ray(Vec* v0, Vec* v1);
+        Vec* getOrigin() const;
+        Vec* getPoint() const;
 };
 
 
@@ -87,6 +90,7 @@ class Figure
    void initFigure(ifstream& ifs);
    Color getColor(double c);
    virtual double intersection(const Ray& r, double minT, double maxT) const = 0;
+   virtual Vec getNormal() const = 0;
 };
 
 
@@ -101,6 +105,12 @@ class Plane : public Figure
   public:
     Plane(ifstream& ifs);
     virtual double intersection(const Ray& r, double minT, double maxT) const;
+    virtual Vec getNormal();
+    Vec getABC();
+    double getD();
+    Vec getD1();
+    Vec getD2();
+    
 };
 
 class Sphere : public Figure
@@ -111,5 +121,6 @@ class Sphere : public Figure
   public:
     Sphere(ifstream& ifs);
     virtual double intersection(const Ray& r, double minT, double maxT) const;
+    virtual Vec getNormal();
 };
 
