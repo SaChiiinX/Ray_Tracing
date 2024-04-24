@@ -70,6 +70,11 @@ Vec Vec::operator*(double num) const
     return newVec;
 }
 
+Vec Vec::operator*(Vec abc) const
+{
+    return Vec();
+}
+
 Vec::Vec() : x(0.0), y(0.0), z(0.0) {}
 
 Vec::Vec(ifstream& ifs)
@@ -118,21 +123,37 @@ Color::Color(ifstream& ifs)
 Color::Color(double r, double g, double b) : red(r), green(g), blue(b)
 {}
 
-Color Color::add(Color color)
+Color Color::operator+(const Color & c) const
 {
-    return Color(this->red + color.red, this->blue + color.blue, this->green + color.green);
+    return Color(this->red + c.red, this->green + c.green, this->blue + c.blue);
 }
 
-Color Color::scale(double c)
+Color Color::operator*(double c) const
 {
-    return Color(this->red * c, this->blue * c, this->green * c);
+    double r = min(255.0, this->red * c);
+    double g = min(255.0, this->green * c);
+    double b = min(255.0, this->blue * c);
+    return Color(this->red * c, this->green * c, this->blue * c);
+}
+
+Color Color::operator*(const Color& c) const
+{
+    double r = min(255.0, this->red * c.red);
+    double g = min(255.0, this->green * c.green);
+    double b = min(255.0, this->blue * c.blue);
+    return Color(this->red * c.red, this->green * c.green, this->blue * c.blue);
 }
 
 void Color::writeOut(ofstream& ofs)
 {
-    ofs << this->red << " ";
-    ofs << this->blue << " ";
-    ofs << this->green << " ";
+
+    ofs << (int)this->red << " ";
+    ofs << (int)this->green << " ";
+    ofs << (int)this->blue << " ";
+}
+
+void Color::printOut() {
+    cout << "r: " << this->red << " g: " << this->green << " b: " << this->blue << "\n";
 }
 
 Figure::Figure(){}
@@ -149,10 +170,57 @@ void Figure::initFigure(ifstream& ifs)
 
 Color Figure::getColor(double c)
 {
-    Color combined = diffuse.add(specular);
-    combined = combined.scale(c);
-    combined = ambient.add(combined);
+    Color combined = diffuse+specular;
+    combined = combined*c;
+    combined = ambient+combined;
     return combined;
+}
+
+Color Figure::getColorAmbient()
+{
+    return this->ambient;
+}
+
+Color Figure::getColorDiffuse()
+{
+    return this->diffuse;
+}
+
+Color Figure::getColorSpecular()
+{
+    return this->specular;
+}
+
+Color Figure::getColorReflectivity()
+{
+    return this->reflectivity;
+}
+
+Color Figure::getColorTransmissivity()
+{
+    return this->transmissivity;
+}
+
+
+double Figure::getShininess()
+{
+    return this->shininess;
+}
+
+
+double Figure::getIndexOfRefraction()
+{
+    return this->indexOfRefraction;
+}
+
+int Figure::getRFlag()
+{
+    return this->rFlag;
+}
+
+int Figure::getTFlag()
+{
+    return this->tFlag;
 }
 
 Light::Light(ifstream& ifs) : position(ifs), shading(ifs)
@@ -169,24 +237,23 @@ Sphere::Sphere(ifstream& ifs) : center(ifs)
 
 double Sphere::intersection(const Ray& r, double minT, double maxT) const
 {
-    Vec p0 = *r.getOrigin();
-    Vec p1 = *r.getPoint();
-    Vec h = p1.operator-(p0);
-    Vec k = p0.operator-(center);
+    Vec p0 = r.getOrigin();
+    Vec p1 = r.getDirection();
+    Vec h = p1-p0;
+    Vec k = p0-center;
     double a = h.dot(h);
-    double b = 2 * (h.dot(k));
-    double c = k.dot(k) * radius * radius;
+    double b = 2.0 * (h.dot(k));
+    double c = k.dot(k) - (radius * radius);
 
 
+    double underRoot = b * b - (4 * a * c);
 
-    double sqrtroot = sqrt(b * b - (4 * a * c));
-
-    if (sqrtroot < 0) {
+    if (underRoot < 0 || a == 0.0) {
         return -1;
-
     }
 
-    double denominator = 2 * a * c;
+    double sqrtroot = sqrt(underRoot);
+    double denominator = 2 * a;
     double posQuad = (-b + sqrtroot) / denominator;
     double negQuad = (-b - sqrtroot) / denominator;
 
@@ -204,9 +271,11 @@ double Sphere::intersection(const Ray& r, double minT, double maxT) const
     }
 }
 
-Vec Sphere::getNormal()
+Vec Sphere::getNormal(Vec direction) const
 {
-    return Vec();
+    Vec ret = (direction - center) * (1 / radius);
+    ret.normalize();
+    return ret;
 }
 
 
@@ -220,20 +289,20 @@ Plane::Plane(ifstream& ifs) : abcVector(ifs)
 
 double Plane::intersection(const Ray& r, double minT, double maxT) const
 {
-    Vec p0 = *r.getOrigin();
-    Vec p1 = *r.getPoint();
+    Vec p0 = r.getOrigin();
+    Vec p1 = r.getDirection();
     double denominator = (p1 - (p0)).dot(abcVector);
 
     if (denominator == 0) {
         return minT;
     }
     else {
-        double numerator = dScalar - p1.dot(abcVector);
+        double numerator = dScalar - (p1.dot(abcVector));
         return numerator / denominator;
     }
 }
 
-Vec Plane::getNormal()
+Vec Plane::getNormal(Vec direction) const
 {
     return abcVector;
 }
@@ -288,49 +357,66 @@ void parseSceneFile(char* sceneName)
   ifs.close();
 }
 
-Ray::Ray(Vec* v1)
+Ray::Ray(Vec v1)
 {
-    this->v0 = new Vec(cameraX, cameraY, cameraZ);
-    // This may be a problem later
+    this->v0 = Vec(cameraX, cameraY, cameraZ);
     this->v1 = v1;
 }
 
-Ray::Ray(Vec* v0, Vec* v1)
+Ray::Ray(Vec v0, Vec v1)
 {
-    // May run into pointer issues later
     this->v0 = v0;
     this->v1 = v1;
 }
 
-Vec* Ray::getOrigin() const
+Vec Ray::getOrigin() const
 {
     return this->v0;
 }
 
-Vec* Ray::getPoint() const
+Vec Ray::getDirection() const
 {
     return this->v1;
 }
 
-Color RT_shade(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth)
+Vec Ray::rayPoint(double t) const
 {
-    Color newColor = ambient * obj->getColorAmbient();
-    ... RT_lights(obj, ray, i, normal)
-        ... RT_reflect(obj, ray, i, normal, depth);
-    ... RT_transmit(obj, ray, i, normal, entering, depth);
-    ...
+    return v0+(v1-v0)*t;
 }
 
+Color RT_lights(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal)
+{
+    return Color();
+}
 
+Color RT_reflect(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, double depth)
+{
+    return Color();
+}
 
+Color RT_transmit(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth)
+{
+    return Color();
+}
+
+Color RT_shade(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth)
+{
+    Color newColor2 = obj->getColorAmbient();
+    Color newColor1 = ambient;
+    Color newColor = newColor1 * newColor2;
+    Color l = RT_lights(obj, ray, i, normal);
+    Color r = RT_reflect(obj, ray, i, normal, depth);
+    Color t = RT_transmit(obj, ray, i, normal, entering, depth);
+    return newColor2;
+}
 
 pair<double, Figure*> nearestIntersection(const Ray& r, double minT, double maxT, bool mayBeTransparent = true)
 {
-    pair<double, Figure*> ret(maxT, NULL);
+    pair<double, Figure*> ret (maxT, NULL);
     for (Figure* figure : shapeList)
     {
         double val = figure->intersection(r, minT, maxT);
-        if (val < ret.first) {
+        if (val >= 0 && val < ret.first) {
             ret.first = val;
             ret.second = figure;
         }   
@@ -345,8 +431,17 @@ Color RT_trace(const Ray& r, double depth)
     double epsilon = 1;
     double maxT = 5000;
     pair<double, Figure*> intersection =  nearestIntersection(r, epsilon, maxT);
-    Figure* nearest = intersection.second;
-    RT_shade(nearest, r, i, nearest->, entering, depth);
+    Figure* obj = intersection.second;
+
+    if (!obj) {
+        return backgroundColor;
+    }
+
+    Vec i = r.rayPoint(intersection.first);
+    Vec normal = intersection.second->getNormal(r.getDirection());
+    bool entering = true;
+
+    return RT_shade(obj, r, i, normal, entering, depth);
 }
 
 
@@ -362,10 +457,10 @@ void RT_algorithm()
             double x = minX + wp/2 + u*wp;
             double y = minY + hp/2 + v*hp;
 
-            Vec* point = new Vec(x,y,zCoor);
-            Ray* ray = new Ray(point);
+            Vec point = Vec(x,y,zCoor);
+            Ray ray = Ray(point);
             
-            pixelColors[u][v] = RT_trace(*ray, 1);
+            pixelColors[u][v] = RT_trace(ray, 1);
         }
     }
 }
@@ -383,23 +478,23 @@ void writeImageFile()
 {
     ofstream ofs;
     ofs.open("test.ppm");
-    ofs << "P3\n";
-    ofs << horizontalResolution << " " << verticalResolution << " " << "\n";
-
-    // Color of each pixel
-    for (int u = 0; u < horizontalResolution; u++) {
-        for (int v = 0; v < verticalResolution; v++) {
-            pixelColors[u][v].writeOut(ofs);
-            cout << "\n";
+    ofs << "P3 \n";
+    ofs << horizontalResolution << " " << verticalResolution << " \n";
+    ofs << 255 << " \n";
+    for (int v = verticalResolution-1; v >= 0; v--) {
+        for (int u = 0; u < horizontalResolution; u++) {
+            (pixelColors[u][v]* 255.0).writeOut(ofs);
+            ofs << "\n";
         }
     }
+    
     ofs.close();
 }
 
 
 int main(int, char *argv[])
 {
-    parseSceneFile(argv[1]);
+    parseSceneFile("scenes\\scene.01");//argv[1]);
     initializeImage();
     RT_algorithm();
     writeImageFile();

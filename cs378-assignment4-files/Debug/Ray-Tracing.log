@@ -1,0 +1,3 @@
+﻿cl : command line  warning D9035: option 'Gm' has been deprecated and will be removed in a future release
+  ray-tracing.cpp
+  Ray-Tracing.vcxproj -> C:\Users\skchin\Ray_Tracing\cs378-assignment4-files\Debug\Ray-Tracing.exe

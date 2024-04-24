@@ -9,7 +9,7 @@ class Sphere;
 
 class Vec
 {
-    friend Vec operator*(double num, const Vec& v);
+    //friend Vec operator*(double num, const Vec& v);
 
 private:
     double x;
@@ -23,6 +23,7 @@ public:
     Vec operator+(const Vec& other) const;
     Vec operator-(const Vec& other) const;
     Vec operator*(double t) const;
+    Vec operator*(Vec abc) const;
     const double& operator[](int i) const;
     double& operator[](int i);
     Vec();
@@ -35,19 +36,20 @@ public:
 class Ray
 {
     private:
-        Vec* v0;
-        Vec* v1;
+        Vec v0;
+        Vec v1;
     public:
-        Ray(Vec* v1);
-        Ray(Vec* v0, Vec* v1);
-        Vec* getOrigin() const;
-        Vec* getPoint() const;
+        Ray(Vec v1);
+        Ray(Vec v0, Vec v1);
+        Vec getOrigin() const;
+        Vec getDirection() const;
+        Vec rayPoint(double t) const;
 };
 
 
 class Color
 {
-  friend Color operator*(double num, const Color& c);
+  //friend Color operator*(double num, const Color& c);
 
   protected:
    double red, green, blue;
@@ -56,9 +58,12 @@ class Color
 	Color();
     Color(ifstream& ifs);
     Color(double r, double g, double b);
-    Color add(Color color);
-    Color scale(double c);
+    Color operator+(const Color& c) const;
+    Color operator*(double c) const;
+    Color operator*(const Color& c) const;
     void writeOut(ofstream& ofs);
+
+    void printOut();
 
 };
 
@@ -90,7 +95,16 @@ class Figure
    void initFigure(ifstream& ifs);
    Color getColor(double c);
    virtual double intersection(const Ray& r, double minT, double maxT) const = 0;
-   virtual Vec getNormal() const = 0;
+   virtual Vec getNormal(Vec direction) const = 0;
+   Color getColorAmbient();
+   Color getColorDiffuse();
+   Color getColorSpecular();
+   Color getColorReflectivity();
+   Color getColorTransmissivity();
+   double getShininess();
+   double getIndexOfRefraction();
+   int getRFlag();
+   int getTFlag();
 };
 
 
@@ -105,7 +119,7 @@ class Plane : public Figure
   public:
     Plane(ifstream& ifs);
     virtual double intersection(const Ray& r, double minT, double maxT) const;
-    virtual Vec getNormal();
+    virtual Vec getNormal(Vec direction) const;
     Vec getABC();
     double getD();
     Vec getD1();
@@ -121,6 +135,6 @@ class Sphere : public Figure
   public:
     Sphere(ifstream& ifs);
     virtual double intersection(const Ray& r, double minT, double maxT) const;
-    virtual Vec getNormal();
+    virtual Vec getNormal(Vec direction) const;
 };
 
