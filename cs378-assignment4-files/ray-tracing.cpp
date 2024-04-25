@@ -130,17 +130,11 @@ Color Color::operator+(const Color & c) const
 
 Color Color::operator*(double c) const
 {
-    double r = min(255.0, this->red * c);
-    double g = min(255.0, this->green * c);
-    double b = min(255.0, this->blue * c);
     return Color(this->red * c, this->green * c, this->blue * c);
 }
 
 Color Color::operator*(const Color& c) const
 {
-    double r = min(255.0, this->red * c.red);
-    double g = min(255.0, this->green * c.green);
-    double b = min(255.0, this->blue * c.blue);
     return Color(this->red * c.red, this->green * c.green, this->blue * c.blue);
 }
 
@@ -228,6 +222,21 @@ Light::Light(ifstream& ifs) : position(ifs), shading(ifs)
   ifs >> c0 >> c1 >> c2;
 }
 
+Vec Light::getPosition()
+{
+    return this->position;
+}
+
+Color Light::getShading()
+{
+    return this->shading;
+}
+
+double Light::getFatt(double d)
+{
+    return 1/(c0 + c1*d+c2*d*d);
+}
+
 
 Sphere::Sphere(ifstream& ifs) : center(ifs)
 {
@@ -253,9 +262,9 @@ double Sphere::intersection(const Ray& r, double minT, double maxT) const
     }
 
     double sqrtroot = sqrt(underRoot);
-    double denominator = 2 * a;
-    double posQuad = (-b + sqrtroot) / denominator;
-    double negQuad = (-b - sqrtroot) / denominator;
+    double denominator = 2.0 * a;
+    double posQuad = (double)((-b + sqrtroot) / denominator);
+    double negQuad = (double)((-b - sqrtroot) / denominator);
 
     if ((posQuad >= 1) && (negQuad >= 1)) {
         return min(posQuad, negQuad);
@@ -273,9 +282,9 @@ double Sphere::intersection(const Ray& r, double minT, double maxT) const
 
 Vec Sphere::getNormal(Vec direction) const
 {
-    Vec ret = (direction - center) * (1 / radius);
-    ret.normalize();
-    return ret;
+    Vec normal = (direction - center) * (1.0 / radius);
+    normal.normalize();
+    return normal;
 }
 
 
@@ -293,7 +302,7 @@ double Plane::intersection(const Ray& r, double minT, double maxT) const
     Vec p1 = r.getDirection();
     double denominator = (p1 - (p0)).dot(abcVector);
 
-    if (denominator == 0) {
+    if (denominator == 0.0) {
         return minT;
     }
     else {
@@ -304,7 +313,9 @@ double Plane::intersection(const Ray& r, double minT, double maxT) const
 
 Vec Plane::getNormal(Vec direction) const
 {
-    return abcVector;
+    double magn = abcVector.norm();
+    Vec normal = abcVector * (-1.0 / magn);
+    return normal;
 }
 
 Vec Plane::getABC()
@@ -386,7 +397,22 @@ Vec Ray::rayPoint(double t) const
 
 Color RT_lights(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal)
 {
-    return Color();
+    Color cumLight = Color();
+    Color kColor = obj->getColorDiffuse();
+    for (Light* light : lightList) {
+        Color iColor = light->getShading();
+        Vec direction = light->getPosition();
+        double distance = direction.dot(normal);
+        //Ray lRay = Ray(i,direction);
+        if (direction.dot(normal) > 0) {
+            double fatt = light->getFatt(distance);
+            Color diffuse = iColor * kColor * fatt * max((direction * -1.0).dot(normal), 0.0);
+            Color specular = fatt * iColor * kColor * pow(max());
+            cumLight = cumLight + diffuse + specular;
+        }
+    }
+
+    return cumLight;
 }
 
 Color RT_reflect(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, double depth)
@@ -401,13 +427,11 @@ Color RT_transmit(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, 
 
 Color RT_shade(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth)
 {
-    Color newColor2 = obj->getColorAmbient();
-    Color newColor1 = ambient;
-    Color newColor = newColor1 * newColor2;
+    Color newColor = ambient * obj->getColorAmbient();
     Color l = RT_lights(obj, ray, i, normal);
     Color r = RT_reflect(obj, ray, i, normal, depth);
     Color t = RT_transmit(obj, ray, i, normal, entering, depth);
-    return newColor2;
+    return newColor;
 }
 
 pair<double, Figure*> nearestIntersection(const Ray& r, double minT, double maxT, bool mayBeTransparent = true)
@@ -428,8 +452,8 @@ pair<double, Figure*> nearestIntersection(const Ray& r, double minT, double maxT
 
 Color RT_trace(const Ray& r, double depth)
 {
-    double epsilon = 1;
-    double maxT = 5000;
+    double epsilon = 1.0;
+    double maxT = 5000.0;
     pair<double, Figure*> intersection =  nearestIntersection(r, epsilon, maxT);
     Figure* obj = intersection.second;
 
@@ -448,14 +472,12 @@ Color RT_trace(const Ray& r, double depth)
 void RT_algorithm() 
 {
     for (int u = 0; u < horizontalResolution; u++) {
+        double dx = (maxX - minX)/(double) horizontalResolution;
+        double dy = (maxY - minY)/(double) verticalResolution;
         for (int v = 0; v < verticalResolution; v++) {
 
-            double wp = (maxX - minX) / u;
-            double hp = (maxY - minY) / v;
-
-
-            double x = minX + wp/2 + u*wp;
-            double y = minY + hp/2 + v*hp;
+            double x = minX + dx/2.0 + (double)u*dx;
+            double y = minY + dy / 2.0 + (double)v * dy;
 
             Vec point = Vec(x,y,zCoor);
             Ray ray = Ray(point);

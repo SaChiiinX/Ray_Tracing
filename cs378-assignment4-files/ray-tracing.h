@@ -71,6 +71,9 @@ class Light
 {
   public:
     Light(ifstream& ifs);
+    Vec getPosition();
+    Color getShading();
+    double getFatt(double d);
   private:
     Vec position;
     Color shading;

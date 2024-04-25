@@ -1,3 +1,4 @@
 ﻿cl : command line  warning D9035: option 'Gm' has been deprecated and will be removed in a future release
   ray-tracing.cpp
+ray-tracing.obj : warning LNK4075: ignoring '/EDITANDCONTINUE' due to '/SAFESEH' specification
   Ray-Tracing.vcxproj -> C:\Users\skchin\Ray_Tracing\cs378-assignment4-files\Debug\Ray-Tracing.exe
