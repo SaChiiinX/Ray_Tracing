@@ -20,6 +20,7 @@ public:
     void normalize();
     double norm() const;
     double dot(const Vec& other) const;
+    double distance(const Vec& other) const;
     Vec operator+(const Vec& other) const;
     Vec operator-(const Vec& other) const;
     Vec operator*(double t) const;

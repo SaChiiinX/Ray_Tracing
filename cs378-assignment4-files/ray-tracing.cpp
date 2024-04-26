@@ -48,6 +48,7 @@ double Vec::dot(const Vec& other) const
     return sumX + sumY + sumZ;
 }
 
+
 Vec Vec::operator+(const Vec& other) const
 {
     double x2 = x + other.x;
@@ -314,7 +315,7 @@ double Plane::intersection(const Ray& r, double minT, double maxT) const
 Vec Plane::getNormal(Vec direction) const
 {
     double magn = abcVector.norm();
-    Vec normal = abcVector * (-1.0 / magn);
+    Vec normal = abcVector * (1.0 / magn);
     return normal;
 }
 
@@ -399,15 +400,25 @@ Color RT_lights(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal)
 {
     Color cumLight = Color();
     Color kColor = obj->getColorDiffuse();
+    double shininess = obj->getShininess();
     for (Light* light : lightList) {
-        Color iColor = light->getShading();
-        Vec direction = light->getPosition();
-        double distance = direction.dot(normal);
-        //Ray lRay = Ray(i,direction);
-        if (direction.dot(normal) > 0) {
+        Vec dir = light->getPosition()-i;
+        dir.normalize();
+        Ray LRay = Ray(i, dir);
+        Vec L = LRay.getDirection();
+        if (L.dot(normal) > 0) {
+            
+            double distance = (L).norm();
             double fatt = light->getFatt(distance);
-            Color diffuse = iColor * kColor * fatt * max((direction * -1.0).dot(normal), 0.0);
-            Color specular = fatt * iColor * kColor * pow(max());
+
+            Color iColor = light->getShading();
+            Color ikf = iColor * kColor * fatt;
+
+            Color diffuse = ikf * max(L.dot(normal), 0.0);
+
+            Vec s = (normal * (normal.dot(L))) - L;
+            Vec r = L + s + s;
+            Color specular = ikf * pow(max(r.dot(L*-1), 0.0), shininess);
             cumLight = cumLight + diffuse + specular;
         }
     }
@@ -427,11 +438,12 @@ Color RT_transmit(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, 
 
 Color RT_shade(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth)
 {
+    double c = 1;
     Color newColor = ambient * obj->getColorAmbient();
     Color l = RT_lights(obj, ray, i, normal);
     Color r = RT_reflect(obj, ray, i, normal, depth);
     Color t = RT_transmit(obj, ray, i, normal, entering, depth);
-    return newColor;
+    return newColor+(l*c);
 }
 
 pair<double, Figure*> nearestIntersection(const Ray& r, double minT, double maxT, bool mayBeTransparent = true)
@@ -516,7 +528,7 @@ void writeImageFile()
 
 int main(int, char *argv[])
 {
-    parseSceneFile("scenes\\scene.01");//argv[1]);
+    parseSceneFile("scenes\\scene.03");//argv[1]);
     initializeImage();
     RT_algorithm();
     writeImageFile();
