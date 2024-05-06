@@ -27,6 +27,8 @@ Color ambient;
 
 Color** pixelColors;
 
+double epsilon = 0.0000001;
+
 void Vec::normalize()
 {
     double distance = norm();
@@ -235,7 +237,7 @@ Color Light::getShading()
 
 double Light::getFatt(double d)
 {
-    return 1/(c0 + c1*d+c2*d*d);
+    return 1.0/(c0 + c1*d+c2*d*d);
 }
 
 
@@ -256,9 +258,9 @@ double Sphere::intersection(const Ray& r, double minT, double maxT) const
     double c = k.dot(k) - (radius * radius);
 
 
-    double underRoot = b * b - (4 * a * c);
+    double underRoot = b * b - (4.0 * a * c);
 
-    if (underRoot < 0 || a == 0.0) {
+    if (underRoot < 0.0 || a == 0.0) {
         return -1;
     }
 
@@ -267,13 +269,13 @@ double Sphere::intersection(const Ray& r, double minT, double maxT) const
     double posQuad = (double)((-b + sqrtroot) / denominator);
     double negQuad = (double)((-b - sqrtroot) / denominator);
 
-    if ((posQuad >= 1) && (negQuad >= 1)) {
+    if ((posQuad >= 1.0) && (negQuad >= 1.0)) {
         return min(posQuad, negQuad);
     }
-    else if (posQuad >= 1) {
+    else if (posQuad >= 1.0) {
         return posQuad;
     }
-    else if (negQuad >= 1) {
+    else if (negQuad >= 1.0) {
         return negQuad;
     }
     else {
@@ -301,7 +303,7 @@ double Plane::intersection(const Ray& r, double minT, double maxT) const
 {
     Vec p0 = r.getFirst();
     Vec p1 = r.getSecond();
-    double denominator = (p1 - (p0)).dot(abcVector);
+    double denominator = (p1 - p0).dot(abcVector);
 
     if (denominator == 0.0) {
         return minT;
@@ -393,7 +395,7 @@ Vec Ray::getSecond() const
 
 Vec Ray::getDirection() const
 {
-    Vec direction = (v1-v0);
+    Vec direction = v1-v0;
     direction.normalize();
     return direction;
 }
@@ -403,16 +405,16 @@ Vec Ray::rayPoint(double t) const
     return v0+(v1-v0)*t;
 }
 
-Color getDiffuse(Color iColor, Color kColor, double fatt){
-    if (fatt > 0.0){
-        return iColor * kColor * fatt;
+Color getDiffuse(Color iColor, Color kColor, double LN){
+    if (LN > 0.0){
+        return iColor * kColor * LN;
     }
     return Color();
 }
 
-Color getSpecular(Color iColor, Color kColor, double shininess, double fatt){
-    if(fatt > 0.0){
-        return iColor * kColor * pow(fatt, shininess);
+Color getSpecular(Color iColor, Color kColor, double shininess, double RV){
+    if(RV > 0.0){
+        return iColor * kColor * pow(RV, shininess);
     }
     return Color();
 }
@@ -432,9 +434,10 @@ pair<double, Figure*> nearestIntersection(const Ray& r, double minT, double maxT
     return ret;
 }
 
+Color RT_shade(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth);
+
 Color RT_trace(const Ray& r, double depth)
 {
-    double epsilon = 0.00001;
     double maxT = 5000.0;
     pair<double, Figure*> intersection =  nearestIntersection(r, epsilon, maxT);
     Figure* obj = intersection.second;
@@ -456,35 +459,37 @@ Color RT_lights(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal)
     Color diffuseColor = obj->getColorDiffuse();
     Color specularColor = obj->getColorSpecular();
     Vec inverseDirection = ray.getDirection()*-1.0;
-
     double shininess = obj->getShininess();
+
     for (Light* light : lightList) {
         Vec dir = light->getPosition();
         Ray LRay = Ray(i, dir);
         double distance = (i-dir).norm();
-        double fattD = light->getFatt(distance);
+        double fatt = light->getFatt(distance);
         Vec LRayDirection = LRay.getDirection();
         double LN = LRayDirection.dot(normal);
         Color iColor = light->getShading();
 
-        bool notBlocking = !(nearestIntersection(LRay, 0.00001, 1.0, false).second);
-        if(notBlocking){
-            Color diffuse = getDiffuse(iColor, diffuseColor, fattD);
-            double fattS = inverseDirection.dot((normal*2.0*fattD)-LRayDirection); 
-            Color specular = getSpecular(iColor, specularColor, shininess, fattS);
+        //bool idk = !(nearestIntersection(LRay, epsilon, 1.0, false).second);
+
+        //if (idk) {
+            Color diffuse = getDiffuse(iColor, diffuseColor, LN) * fatt;
+            double RV = inverseDirection.dot((normal * (LN + LN)) - LRayDirection);
+            Color specular = getSpecular(iColor, specularColor, shininess, RV) * fatt;
             cumLight = cumLight + diffuse + specular;
-        } 
-    }
+        //}
+        
+   }
 
     return cumLight;
 }
 
 Color RT_reflect(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, double depth)
 {
-    if(/*(depth <= maxDepth) && */(obj->getRFlag() == 1)){
+    if((depth <= maxDepth) && (obj->getRFlag() == 1.0)) {
         Vec inverseDirection = ray.getDirection()*-1.0;
         double s = inverseDirection.dot(normal);
-        Ray reflection = Ray(i, i+(normal * 2.0*s)-inverseDirection);
+        Ray reflection = Ray(i, i+(normal * (s+s))-inverseDirection);
         return obj->getColorReflectivity()*RT_trace(reflection,depth+1);
     }
     return Color();
@@ -492,7 +497,7 @@ Color RT_reflect(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, d
 
 Color RT_transmit(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth)
 {
-    if((obj->getTFlag() != 1)){
+    if((obj->getTFlag() != 1.0)){
         return Color();
     }
 
@@ -518,6 +523,7 @@ Color RT_shade(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, boo
     if (depth < maxDepth){
         Color r = RT_reflect(obj, ray, i, normal, depth);
         Color t = RT_transmit(obj, ray, i, normal, entering, depth);
+        t = Color();
         return newColor + l + r + t;
     }
     
@@ -531,7 +537,7 @@ void RT_algorithm()
         double dy = (maxY - minY)/(double) verticalResolution;
         for (int v = 0; v < verticalResolution; v++) {
 
-            double x = minX + dx/2.0 + (double)u*dx;
+            double x = minX + dx / 2.0 + (double)u*dx;
             double y = minY + dy / 2.0 + (double)v * dy;
 
             Vec point = Vec(x,y,zCoor);
@@ -571,7 +577,7 @@ void writeImageFile()
 
 int main(int, char *argv[])
 {
-    parseSceneFile("scenes\\scene.03");//argv[1]);
+    parseSceneFile("scenes\\scene.04");//argv[1]);
     initializeImage();
     RT_algorithm();
     writeImageFile();
