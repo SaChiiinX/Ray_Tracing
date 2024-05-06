@@ -247,8 +247,8 @@ Sphere::Sphere(ifstream& ifs) : center(ifs)
 
 double Sphere::intersection(const Ray& r, double minT, double maxT) const
 {
-    Vec p0 = r.getOrigin();
-    Vec p1 = r.getDirection();
+    Vec p0 = r.getFirst();
+    Vec p1 = r.getSecond();
     Vec h = p1-p0;
     Vec k = p0-center;
     double a = h.dot(h);
@@ -299,8 +299,8 @@ Plane::Plane(ifstream& ifs) : abcVector(ifs)
 
 double Plane::intersection(const Ray& r, double minT, double maxT) const
 {
-    Vec p0 = r.getOrigin();
-    Vec p1 = r.getDirection();
+    Vec p0 = r.getFirst();
+    Vec p1 = r.getSecond();
     double denominator = (p1 - (p0)).dot(abcVector);
 
     if (denominator == 0.0) {
@@ -381,14 +381,21 @@ Ray::Ray(Vec v0, Vec v1)
     this->v1 = v1;
 }
 
-Vec Ray::getOrigin() const
+Vec Ray::getFirst() const
 {
     return this->v0;
 }
 
-Vec Ray::getDirection() const
+Vec Ray::getSecond() const
 {
     return this->v1;
+}
+
+Vec Ray::getDirection() const
+{
+    Vec direction = (v1-v0);
+    direction.normalize();
+    return direction;
 }
 
 Vec Ray::rayPoint(double t) const
@@ -396,63 +403,27 @@ Vec Ray::rayPoint(double t) const
     return v0+(v1-v0)*t;
 }
 
-Color RT_lights(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal)
-{
-    Color cumLight = Color();
-    Color kColor = obj->getColorDiffuse();
-    double shininess = obj->getShininess();
-    for (Light* light : lightList) {
-        Vec dir = light->getPosition()-i;
-        dir.normalize();
-        Ray LRay = Ray(i, dir);
-        Vec L = LRay.getDirection();
-        if (L.dot(normal) > 0) {
-            
-            double distance = (L).norm();
-            double fatt = light->getFatt(distance);
-
-            Color iColor = light->getShading();
-            Color ikf = iColor * kColor * fatt;
-
-            Color diffuse = ikf * max(L.dot(normal), 0.0);
-
-            Vec s = (normal * (normal.dot(L))) - L;
-            Vec r = L + s + s;
-            Color specular = ikf * pow(max(r.dot(L*-1), 0.0), shininess);
-            cumLight = cumLight + diffuse + specular;
-        }
+Color getDiffuse(Color iColor, Color kColor, double fatt){
+    if (fatt > 0.0){
+        return iColor * kColor * fatt;
     }
-
-    return cumLight;
-}
-
-Color RT_reflect(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, double depth)
-{
     return Color();
 }
 
-Color RT_transmit(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth)
-{
+Color getSpecular(Color iColor, Color kColor, double shininess, double fatt){
+    if(fatt > 0.0){
+        return iColor * kColor * pow(fatt, shininess);
+    }
     return Color();
-}
-
-Color RT_shade(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth)
-{
-    double c = 1;
-    Color newColor = ambient * obj->getColorAmbient();
-    Color l = RT_lights(obj, ray, i, normal);
-    Color r = RT_reflect(obj, ray, i, normal, depth);
-    Color t = RT_transmit(obj, ray, i, normal, entering, depth);
-    return newColor+(l*c);
 }
 
 pair<double, Figure*> nearestIntersection(const Ray& r, double minT, double maxT, bool mayBeTransparent = true)
 {
-    pair<double, Figure*> ret (maxT, NULL);
+    pair<double, Figure*> ret (maxT+minT, NULL);
     for (Figure* figure : shapeList)
     {
         double val = figure->intersection(r, minT, maxT);
-        if (val >= 0 && val < ret.first) {
+        if (val >= minT && val < ret.first) {
             ret.first = val;
             ret.second = figure;
         }   
@@ -461,10 +432,9 @@ pair<double, Figure*> nearestIntersection(const Ray& r, double minT, double maxT
     return ret;
 }
 
-
 Color RT_trace(const Ray& r, double depth)
 {
-    double epsilon = 1.0;
+    double epsilon = 0.00001;
     double maxT = 5000.0;
     pair<double, Figure*> intersection =  nearestIntersection(r, epsilon, maxT);
     Figure* obj = intersection.second;
@@ -480,6 +450,79 @@ Color RT_trace(const Ray& r, double depth)
     return RT_shade(obj, r, i, normal, entering, depth);
 }
 
+Color RT_lights(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal)
+{
+    Color cumLight = Color();
+    Color diffuseColor = obj->getColorDiffuse();
+    Color specularColor = obj->getColorSpecular();
+    Vec inverseDirection = ray.getDirection()*-1.0;
+
+    double shininess = obj->getShininess();
+    for (Light* light : lightList) {
+        Vec dir = light->getPosition();
+        Ray LRay = Ray(i, dir);
+        double distance = (i-dir).norm();
+        double fattD = light->getFatt(distance);
+        Vec LRayDirection = LRay.getDirection();
+        double LN = LRayDirection.dot(normal);
+        Color iColor = light->getShading();
+
+        bool notBlocking = !(nearestIntersection(LRay, 0.00001, 1.0, false).second);
+        if(notBlocking){
+            Color diffuse = getDiffuse(iColor, diffuseColor, fattD);
+            double fattS = inverseDirection.dot((normal*2.0*fattD)-LRayDirection); 
+            Color specular = getSpecular(iColor, specularColor, shininess, fattS);
+            cumLight = cumLight + diffuse + specular;
+        } 
+    }
+
+    return cumLight;
+}
+
+Color RT_reflect(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, double depth)
+{
+    if(/*(depth <= maxDepth) && */(obj->getRFlag() == 1)){
+        Vec inverseDirection = ray.getDirection()*-1.0;
+        double s = inverseDirection.dot(normal);
+        Ray reflection = Ray(i, i+(normal * 2.0*s)-inverseDirection);
+        return obj->getColorReflectivity()*RT_trace(reflection,depth+1);
+    }
+    return Color();
+}
+
+Color RT_transmit(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth)
+{
+    if((obj->getTFlag() != 1)){
+        return Color();
+    }
+
+    Vec inverseDirection = ray.getDirection()*-1.0;
+    double s =  inverseDirection.dot(normal);
+    double indexOfRefraction = obj->getIndexOfRefraction();
+    double temp1 = indexOfRefraction * s;
+    double temp2 = 1.0 - indexOfRefraction + indexOfRefraction*indexOfRefraction*s*s;
+
+    if(temp2 < 0.0){
+        return Color();
+    }
+
+    double temp3 = temp1 - sqrt(temp2);
+    Ray TRay(i,i+(normal*temp3 - inverseDirection*indexOfRefraction));
+    return obj->getColorTransmissivity() * RT_trace(TRay,depth+1);
+}
+
+Color RT_shade(Figure* obj, const Ray& ray, const Vec& i, const Vec& normal, bool entering, double depth)
+{
+    Color newColor = ambient * obj->getColorAmbient();
+    Color l = RT_lights(obj, ray, i, normal);
+    if (depth < maxDepth){
+        Color r = RT_reflect(obj, ray, i, normal, depth);
+        Color t = RT_transmit(obj, ray, i, normal, entering, depth);
+        return newColor + l + r + t;
+    }
+    
+    return newColor + l;
+}
 
 void RT_algorithm() 
 {

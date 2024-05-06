@@ -42,7 +42,8 @@ class Ray
     public:
         Ray(Vec v1);
         Ray(Vec v0, Vec v1);
-        Vec getOrigin() const;
+        Vec getFirst() const;
+        Vec getSecond() const;
         Vec getDirection() const;
         Vec rayPoint(double t) const;
 };
@@ -75,6 +76,8 @@ class Light
     Vec getPosition();
     Color getShading();
     double getFatt(double d);
+    Color getDiffuse();
+    Color getSpecular();
   private:
     Vec position;
     Color shading;
